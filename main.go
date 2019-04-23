@@ -79,7 +79,7 @@ func main() {
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 
-	pendingTable := &Table{}
+	var pendingTable *Table
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -98,6 +98,7 @@ func main() {
 
 		table, ok := findTable(line)
 		if ok {
+			pendingTable = &Table{}
 			pendingTable.Name = table
 			output.Tables = append(output.Tables, pendingTable)
 			continue
