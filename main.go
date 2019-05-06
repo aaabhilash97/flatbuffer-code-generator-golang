@@ -20,12 +20,13 @@ type mappingVal struct {
 }
 
 var typeMapping = map[string]mappingVal{
-	"long":   mappingVal{true, "int64"},
-	"int":    mappingVal{true, "int32"},
-	"float":  mappingVal{true, "float32"},
-	"double": mappingVal{true, "float64"},
-	"bool":   mappingVal{true, "bool"},
-	"string": mappingVal{false, "string"},
+	"long":    mappingVal{true, "int64"},
+	"int":     mappingVal{true, "int32"},
+	"float":   mappingVal{true, "float32"},
+	"double":  mappingVal{true, "float64"},
+	"bool":    mappingVal{true, "bool"},
+	"string":  mappingVal{false, "string"},
+	"[ubyte]": mappingVal{false, "[]byte"},
 }
 
 // Field -
@@ -123,6 +124,7 @@ func main() {
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
+	output.OutputFile = path.Join(outputF, output.NameSpace, strings.ReplaceAll(fName, ".fbs", ".fb.go"))
 	generateGoCode(*output)
 }
 
@@ -136,7 +138,7 @@ func findTable(line string) (string, bool) {
 }
 
 func findField(line string) (field, fieldType string, ok bool) {
-	matcher, _ := regexp.Compile("(\\w+)\\s?\\:\\s?(\\w+)\\s?")
+	matcher, _ := regexp.Compile("(\\w+)\\s?\\:\\s?([\\[\\]\\w]+)\\s?\\;")
 	foundMatch := matcher.FindStringSubmatch(line)
 	if len(foundMatch) > 2 {
 		return foundMatch[1], foundMatch[2], true
@@ -189,7 +191,7 @@ func generateGoCode(fbs Fbs) {
 	output += importString
 
 	for _, table := range fbs.Tables {
-		s := fmt.Sprintf("type X%s struct {\n", table.Name)
+		s := fmt.Sprintf("type X%s struct {\n", strcase.ToCamel(table.Name))
 		output += s
 		for _, field := range table.Fields {
 			s := fmt.Sprintf("\t%s %s\n", strcase.ToCamel(field.Name), typeMapping[field.Type].Type)
@@ -197,37 +199,44 @@ func generateGoCode(fbs Fbs) {
 		}
 		output += "}\n"
 
-		output += fmt.Sprintf("// Create to build flat buf binary - %s\n", table.Name)
-		output += fmt.Sprintf("func (value *X%s) Create() []byte {\n", table.Name)
+		output += fmt.Sprintf("// Create to build flat buf binary - %s\n", strcase.ToCamel(table.Name))
+		output += fmt.Sprintf("func (value *X%s) Create() []byte {\n", strcase.ToCamel(table.Name))
 		output += "builder := flatbuffers.NewBuilder(1024)\n"
 		for _, field := range table.Fields {
 			if typeMapping[field.Type].Type == "string" {
 				output += fmt.Sprintf("%s := builder.CreateString(value.%s)\n", strcase.ToCamel(field.Name), strcase.ToCamel(field.Name))
+			} else if typeMapping[field.Type].Type == "[]byte" {
+				output += fmt.Sprintf("%sStart%sVector(builder, len(value.%s))\n", strcase.ToCamel(table.Name), strcase.ToCamel(field.Name), strcase.ToCamel(field.Name))
+				output += fmt.Sprintf("for i := len(value.%s); i >= 0; i-- {\n", strcase.ToCamel(field.Name))
+				output += fmt.Sprintf("builder.PrependByte(byte(i))\n}\n")
+				output += fmt.Sprintf("%s := builder.EndVector(len(value.%s))\n", field.Name, strcase.ToCamel(field.Name))
 			}
 		}
-		output += fmt.Sprintf("%sStart(builder)\n", table.Name)
+		output += fmt.Sprintf("%sStart(builder)\n", strcase.ToCamel(table.Name))
 		for _, field := range table.Fields {
 			if typeMapping[field.Type].IsScalar {
-				output += fmt.Sprintf("%sAdd%s(builder, value.%s)\n", table.Name, strcase.ToCamel(field.Name), strcase.ToCamel(field.Name))
+				output += fmt.Sprintf("%sAdd%s(builder, value.%s)\n", strcase.ToCamel(table.Name), strcase.ToCamel(field.Name), strcase.ToCamel(field.Name))
 			} else if typeMapping[field.Type].Type == "string" {
-				output += fmt.Sprintf("%sAdd%s(builder, %s)\n", table.Name, strcase.ToCamel(field.Name), strcase.ToCamel(field.Name))
+				output += fmt.Sprintf("%sAdd%s(builder, %s)\n", strcase.ToCamel(table.Name), strcase.ToCamel(field.Name), strcase.ToCamel(field.Name))
+			} else if typeMapping[field.Type].Type == "[]byte" {
+				output += fmt.Sprintf("%sAdd%s(builder, %s)\n", strcase.ToCamel(table.Name), strcase.ToCamel(field.Name), field.Name)
 			}
 		}
-		output += fmt.Sprintf("new%s := %sEnd(builder)\n", table.Name, table.Name)
-		output += fmt.Sprintf("builder.Finish(new%s)\n", table.Name)
+		output += fmt.Sprintf("new%s := %sEnd(builder)\n", strcase.ToCamel(table.Name), strcase.ToCamel(table.Name))
+		output += fmt.Sprintf("builder.Finish(new%s)\n", strcase.ToCamel(table.Name))
 		output += "buf := builder.FinishedBytes()\n"
 		output += "return buf\n"
 		output += "}\n\n"
 
-		output += fmt.Sprintf("// Read to Read %s from bytes\n", table.Name)
-		output += fmt.Sprintf("func (value *X%s) Read(buf []byte) *X%s {\n", table.Name, table.Name)
-		output += fmt.Sprintf("new%s := GetRootAs%s(buf, 0)\n", table.Name, table.Name)
-		output += fmt.Sprintf("if new%s == nil {\nreturn nil\n}\n", table.Name)
+		output += fmt.Sprintf("// Read to Read %s from bytes\n", strcase.ToCamel(table.Name))
+		output += fmt.Sprintf("func (value *X%s) Read(buf []byte) *X%s {\n", strcase.ToCamel(table.Name), strcase.ToCamel(table.Name))
+		output += fmt.Sprintf("new%s := GetRootAs%s(buf, 0)\n", strcase.ToCamel(table.Name), strcase.ToCamel(table.Name))
+		output += fmt.Sprintf("if new%s == nil {\nreturn nil\n}\n", strcase.ToCamel(table.Name))
 		for _, field := range table.Fields {
 			if typeMapping[field.Type].IsScalar {
-				output += fmt.Sprintf("value.%s = new%s.%s()\n", strcase.ToCamel(field.Name), table.Name, strcase.ToCamel(field.Name))
+				output += fmt.Sprintf("value.%s = new%s.%s()\n", strcase.ToCamel(field.Name), strcase.ToCamel(table.Name), strcase.ToCamel(field.Name))
 			} else if typeMapping[field.Type].Type == "string" {
-				output += fmt.Sprintf("value.%s = string(new%s.%s())\n", strcase.ToCamel(field.Name), table.Name, strcase.ToCamel(field.Name))
+				output += fmt.Sprintf("value.%s = string(new%s.%s())\n", strcase.ToCamel(field.Name), strcase.ToCamel(table.Name), strcase.ToCamel(field.Name))
 			}
 		}
 		output += "return value\n"
