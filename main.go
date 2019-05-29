@@ -59,6 +59,10 @@ func main() {
 	flag.StringVar(&outputF, "o", "", "output fbs folder")
 	flag.Parse()
 
+	if strings.HasSuffix(input, "pagination.fbs") {
+		return
+	}
+
 	if input == "" {
 		log.Fatal("Input is required")
 	}
