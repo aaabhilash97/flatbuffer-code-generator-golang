@@ -99,6 +99,10 @@ func main() {
 
 		table, ok := findTable(line)
 		if ok {
+			if table == "Pagination" {
+				pendingTable = nil
+				continue
+			}
 			pendingTable = &Table{}
 			pendingTable.Name = table
 			output.Tables = append(output.Tables, pendingTable)
@@ -112,7 +116,7 @@ func main() {
 		}
 
 		fieldName, fieldType, ok := findField(line)
-		if ok {
+		if ok && pendingTable != nil {
 			field := &Field{
 				Name: fieldName,
 				Type: fieldType,
