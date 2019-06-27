@@ -20,13 +20,14 @@ type mappingVal struct {
 }
 
 var typeMapping = map[string]mappingVal{
-	"long":    mappingVal{true, "int64"},
-	"int":     mappingVal{true, "int32"},
-	"float":   mappingVal{true, "float32"},
-	"double":  mappingVal{true, "float64"},
-	"bool":    mappingVal{true, "bool"},
-	"string":  mappingVal{false, "string"},
-	"[ubyte]": mappingVal{false, "[]byte"},
+	"long":     mappingVal{true, "int64"},
+	"int":      mappingVal{true, "int32"},
+	"float":    mappingVal{true, "float32"},
+	"double":   mappingVal{true, "float64"},
+	"bool":     mappingVal{true, "bool"},
+	"string":   mappingVal{false, "string"},
+	"[string]": mappingVal{false, "[]string"},
+	"[ubyte]":  mappingVal{false, "[]byte"},
 }
 
 // Field -
@@ -132,7 +133,7 @@ func main() {
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
-	output.OutputFile = path.Join(outputF, output.NameSpace, strings.ReplaceAll(fName, ".fbs", ".fb.go"))
+	output.OutputFile = path.Join(outputF, strings.ReplaceAll(fName, ".fbs", ".fb.go"))
 	generateGoCode(*output)
 }
 
